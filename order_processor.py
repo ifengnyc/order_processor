@@ -85,6 +85,14 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
             .reindex(columns=['Item Code', 'Item Name', 'Description', 'Quantity', 'Stock UOM', 'UOM', 'Amount (TWD)'])
         )
 
+        level0 = ['Bulk Edit Delivery Note Item'] * len(delivery.T)
+        level1 = ['Item Code', 'Item Name', 'Description', 'Quantity', 'Stock UOM', 'UOM', 'Amount (TWD)']
+        level2 = ['item_code', 'item_name', 'description', 'qty', 'stock_uom', 'uom', 'amount']
+
+        multi_cols = pd.MultiIndex.from_arrays([level0, level1, level2])
+
+        delivery.columns = multi_cols
+
         # ---- Display & Download Results ----
 
         st.write("Processed orders:")
