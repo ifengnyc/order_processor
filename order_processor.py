@@ -26,21 +26,9 @@ exception_cases = load_data_if_exists(EXCEPTION_CASES_FILE, "Exception cases")
 
 st.title("Order Processing App")
 
-# Initialize file uploader variables (even if not used initially)
-uploaded_orders = None
-uploaded_item_data = None
-uploaded_exception_cases = None
 
-if item_data is None:
-    uploaded_item_data = st.file_uploader("Upload Item Data File (xlsx)", type=["xlsx"])
-else:
-    st.write("Item data file already loaded.")
-
-if exception_cases is None:
-    uploaded_exception_cases = st.file_uploader("Upload Exception Cases File (xlsx)", type=["xlsx"])
-else:
-    st.write("Exception cases file already loaded.")
-
+uploaded_item_data = st.file_uploader("Upload or Re-upload Item Data File (xlsx)", type=["xlsx"])
+uploaded_exception_cases = st.file_uploader("Upload or Re-upload Exception Cases File (xlsx)", type=["xlsx"])
 uploaded_orders = st.file_uploader("Upload Orders File (xlsx)", type=["xlsx"])
 
 if uploaded_orders:
@@ -70,7 +58,7 @@ if uploaded_exception_cases:
 
 if item_data is not None and exception_cases is not None and 'orders' in locals():
     st.subheader("Process Orders")
-
+    
     if st.button("Process"):
         # ---- Your Data Processing Logic ----
 
