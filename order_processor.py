@@ -79,6 +79,7 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
         # Merge data, rename and rearrange columns according to delivery note template
         delivery = (
             shipment.merge(item_data, how='left', left_on='Variant SKU', right_on='Item Name')
+            .assign(Amount=lambda x:x['Quantity'] * x['Amount'])
             .rename(columns={'ID':'Item Code', 'Item Name':'Item Name', 'Variant SKU':'Description', 'Default Unit of Measure':'Stock UOM', 'Amount':'Amount (USD)'})
             .assign(UOM=lambda x:x['Stock UOM'])
             .reindex(columns=['Item Code', 'Item Name', 'Description', 'Quantity', 'Stock UOM', 'UOM', 'Amount (USD)'])
