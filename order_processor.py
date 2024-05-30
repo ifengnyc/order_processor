@@ -86,8 +86,8 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
 
         # ---- Display & Download Results ----
 
-        st.write("First 10 rows of delivery:")
-        st.write(delivery.head(10).to_html(index=False), unsafe_allow_html=True)
+        st.write("Rows of delivery:")
+        st.write(delivery.to_html(index=False), unsafe_allow_html=True)
 
         st.download_button(
             label="Download Delivery as CSV",
