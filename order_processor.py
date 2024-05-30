@@ -66,7 +66,7 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
         orders = orders[~orders['Variant SKU'].astype(str).str.startswith(('ROUTEINS', 'KITE'))]
 
         # Create dictionaries for multipliers and name changes
-        product_multipliers = dict(zip(exception_cases['Variant SKU'], exception_cases['Qty']))
+        product_multipliers = dict(zip(exception_cases['Variant SKU'], exception_cases['Quantity']))
         product_name_changes = dict(zip(exception_cases['Variant SKU'], exception_cases['Item Name']))
 
         # Apply multipliers and name changes
