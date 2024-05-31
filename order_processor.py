@@ -77,19 +77,18 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
         shipment = orders.groupby('Variant SKU')['Quantity'].sum().reset_index()
 
         # Merge data, rename and rearrange columns according to delivery note template
+
+        col = ['item_code', 'item_name', 'description', 'qty', 'stock_uom', 'uom', 'amount']
+        
         delivery = (
             shipment.merge(item_data, how='left', left_on='Variant SKU', right_on='Item Name')
-            .assign(Amount=lambda x:x['Quantity'] * x['Amount'])
-            .assign(UOM=lambda x:x['Default Unit of Measure'])
-            .rename(columns={'ID':'Item Code', 'Item Name':'Item Name', 'Variant SKU':'Description', 'Default Unit of Measure':'Stock UOM', 'Amount':'Amount (TWD)'})
-            .reindex(columns=['Item Code', 'Item Name', 'Description', 'Quantity', 'Stock UOM', 'UOM', 'Amount (TWD)'])
+            .assign(amount=lambda x:x['Quantity'] * x['Amount'])
+            .assign(uom=lambda x:x['Default Unit of Measure'])
+            .rename(columns={'ID':'item_code', 'Item Name':'item_name', 'Variant SKU':'description', 'Default Unit of Measure':'stock_uom'})
+            .reindex(columns=col)
         )
 
-        level0 = ['Bulk Edit Delivery Note Item'] * len(delivery.T)
-        level1 = ['Item Code', 'Item Name', 'Description', 'Quantity', 'Stock UOM', 'UOM', 'Amount (TWD)']
-        level2 = ['item_code', 'item_name', 'description', 'qty', 'stock_uom', 'uom', 'amount']
-
-        multi_cols = pd.MultiIndex.from_arrays([level0, level1, level2])
+        multi_cols = pd.MultiIndex.from_arrays([col, col, col])
 
         delivery.columns = multi_cols
 
