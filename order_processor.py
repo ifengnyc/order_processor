@@ -84,7 +84,7 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
             shipment.merge(item_data, how='left', left_on='Variant SKU', right_on='Item Name')
             .assign(amount=lambda x:x['Quantity'] * x['Amount'])
             .assign(uom=lambda x:x['Default Unit of Measure'])
-            .rename(columns={'ID':'item_code', 'Item Name':'item_name', 'Variant SKU':'description', 'Default Unit of Measure':'stock_uom'})
+            .rename(columns={'ID':'item_code', 'Item Name':'item_name', 'Variant SKU':'description', 'Quantity':'qty', 'Default Unit of Measure':'stock_uom'})
             .reindex(columns=col)
         )
 
