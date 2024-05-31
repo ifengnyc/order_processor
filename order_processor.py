@@ -88,10 +88,6 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
             .reindex(columns=col)
         )
 
-        multi_cols = pd.MultiIndex.from_arrays([col, col, col])
-
-        delivery.columns = multi_cols
-
         # ---- Display & Download Results ----
 
         st.write("Processed orders:")
