@@ -101,11 +101,11 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
         # ---- Display & Download Results ----
 
         st.write("Processed orders:")
-        st.write(delivery)
+        st.write(final_delivery)
 
         st.download_button(
             label="Download Delivery as CSV",
-            data=delivery.to_csv(index=False).encode('utf-8'),
+            data=final_delivery.to_csv(index=False).encode('utf-8'),
             file_name='delivery.csv',
             mime='text/csv',
         )
