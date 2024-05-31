@@ -90,22 +90,19 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
         )
 
         multi_cols = pd.MultiIndex.from_arrays([col, col, col])
-
         delivery.columns = multi_cols
-        
-        final_delivery = (
-            pd.concat([pd.DataFrame(np.nan, index=range(4), columns=delivery.columns), delivery], ignore_index=True)
-            .reset_index(drop=True)
-            )
+
+        new_index = range(-4, len(delivery))
+        delivery = delivery.reindex(new_index)
         
         # ---- Display & Download Results ----
 
         st.write("Processed orders:")
-        st.write(final_delivery)
+        st.write(delivery)
 
         st.download_button(
             label="Download Delivery as CSV",
-            data=final_delivery.to_csv(index=False).encode('utf-8'),
+            data=delivery.to_csv(index=False).encode('utf-8'),
             file_name='delivery.csv',
             mime='text/csv',
         )
