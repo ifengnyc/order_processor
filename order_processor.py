@@ -70,6 +70,9 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
         product_multipliers = dict(zip(exception_cases['Variant SKU'], exception_cases['Quantity']))
         product_name_changes = dict(zip(exception_cases['Variant SKU'], exception_cases['Item Name']))
 
+        # Convert 'Quantity' column in 'orders' to numeric type
+        orders['Quantity'] = pd.to_numeric(orders['Quantity'], errors='coerce')
+
         # Apply multipliers and name changes
         orders['Quantity'] *= orders['Variant SKU'].map(product_multipliers).fillna(1)
         orders['Variant SKU'] = orders['Variant SKU'].replace(product_name_changes)
