@@ -70,6 +70,14 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
         product_multipliers = dict(zip(exception_cases['Variant SKU'], exception_cases['Quantity']))
         product_name_changes = dict(zip(exception_cases['Variant SKU'], exception_cases['Item Name']))
 
+        # Ensuring product multipliers are numeric 
+        for key, value in product_multipliers.items():
+            if not isinstance(value, (int, float)):
+                raise TypeError(f"Invalid multiplier for '{key}': {value}. Multipliers must be numeric.")
+        
+        # Convert Variant SKU to numeric, handling non-numeric values with a default
+        orders['Variant SKU'] = pd.to_numeric(orders['Variant SKU'], errors='coerce').fillna(1)
+        
         # Apply multipliers and name changes
         orders['Quantity'] *= orders['Variant SKU'].map(product_multipliers).fillna(1)
         orders['Variant SKU'] = orders['Variant SKU'].replace(product_name_changes)
