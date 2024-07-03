@@ -61,7 +61,7 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
     st.subheader("Process Orders")
     
     if st.button("Process"):
-        # ---- Your Data Processing Logic ----
+        # ---- Data Processing Logic ----
 
         # Filter out rows where `Variant SKU` starts with 'ROUTEINS' or 'KITE'
         orders = orders[~orders['Variant SKU'].astype(str).str.startswith(('ROUTEINS', 'KITE'))]
