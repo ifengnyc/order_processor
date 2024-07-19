@@ -82,7 +82,7 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
             orders.rename(columns={'Variant SKU': 'Variant_SKU'})
             .assign(Variant_SKU=lambda x: x['Variant_SKU'].str.split('+'))
             .explode('Variant_SKU')
-            .groupby('Variant')['Quantity']
+            .groupby('Variant_SKU')['Quantity']
             .sum()
             .reset_index()
         )
@@ -91,10 +91,10 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
         col = ['item_code', 'item_name', 'description', 'qty', 'stock_uom', 'uom', 'amount']
         
         delivery = (
-            shipment.merge(item_data, how='left', left_on='Variant SKU', right_on='Item Name')
+            shipment.merge(item_data, how='left', left_on='Variant_SKU', right_on='Item Name')
             .assign(amount=lambda x:x['Quantity'] * x['Amount'])
             .assign(uom=lambda x:x['Default Unit of Measure'])
-            .rename(columns={'ID':'item_code', 'Item Name':'item_name', 'Variant SKU':'description', 'Quantity':'qty', 'Default Unit of Measure':'stock_uom'})
+            .rename(columns={'ID':'item_code', 'Item Name':'item_name', 'Variant_SKU':'description', 'Quantity':'qty', 'Default Unit of Measure':'stock_uom'})
             .reindex(columns=col)
         )
 
