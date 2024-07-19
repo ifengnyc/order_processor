@@ -79,12 +79,12 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
 
         # Aggregate and sort
         shipment = (
-            orders.rename(columns={'Variant SKU': 'Variant_SKU'})
-            .assign(Variant_SKU=lambda x: x['Variant_SKU'].str.split('+'))
-            .explode('Variant_SKU')
-            .groupby('Variant_SKU')['Quantity']
+            orders.groupby('Variant SKU')['Quantity']
             .sum()
             .reset_index()
+            .rename(columns={'Variant SKU': 'Variant_SKU'})
+            .assign(Variant_SKU=lambda x:x['Variant_SKU'].str.split('+'))
+            .explode('Variant_SKU')
         )
         # Merge data, rename and rearrange columns according to delivery note template
 
