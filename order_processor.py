@@ -144,7 +144,7 @@ if uploaded_shopify:
 # --- Data Processing (Once Reference Data Exists) ---
 
 if exception_cases is not None and 'stock' in locals() and 'shopify' in locals():
-    st.subheader("Process Inventories (Exception Cases file is needed)")
+    st.subheader("Process Inventories")
 
     if st.button("Process"):
         # ---- Data Processing Logic ----
@@ -177,4 +177,4 @@ if exception_cases is not None and 'stock' in locals() and 'shopify' in locals()
             mime='text/csv',
         )
 else:
-    st.info("Please upload all required files.")
+    st.info("Please upload all required files. Exception Cases file is also needed.")
