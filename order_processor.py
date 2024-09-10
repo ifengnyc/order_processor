@@ -116,7 +116,7 @@ if item_data is not None and exception_cases is not None and 'orders' in locals(
             mime='text/csv',
         )
 else:
-    st.info("Please upload all required files. Item data and exception cases files will be saved for future use.")
+    st.info("Please upload all required files. Item Data and Exception Cases files will be saved for future use.")
 
 
 
