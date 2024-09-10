@@ -174,6 +174,7 @@ if exception_cases is not None and 'stock' in locals() and 'shopify' in locals()
         st.download_button(
             label="Download Shopify as CSV",
             data=shopify.to_csv(index=False).encode('utf-8'),
+            file_name='shopify.csv',
             mime='text/csv',
         )
 else:
