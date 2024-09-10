@@ -178,4 +178,4 @@ if exception_cases is not None and 'stock' in locals() and 'shopify' in locals()
             mime='text/csv',
         )
 else:
-    st.info("Please upload all required files. Exception Cases file is also needed!")
+    st.info("Please upload all required files. Exception Cases file is also needed.")
