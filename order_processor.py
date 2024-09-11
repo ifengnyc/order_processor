@@ -161,8 +161,8 @@ if exception_cases is not None and 'stock' in locals() and 'shopify' in locals()
 
         # Then, update 'On hand' using exception cases, prioritizing the 'Fix Qty'
         shopify['On hand'] = shopify['SKU'].map(exception_fixqty).fillna(shopify['On hand'])
+        
         # Finally, update 'On hand' using exception cases, subtracting the 'Total Qty'
-
         for i in exception_cases['Item Name'].unique():
             shopify.loc[shopify['SKU'] == i, 'On hand'] -= exception_cases.loc[exception_cases['Item Name'] == i, 'Total Qty'].sum()
 
