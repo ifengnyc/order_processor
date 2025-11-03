@@ -1,245 +1,181 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import os
 
-# --- Constants for Data Persistence ---
+# --- Data Persistence (Using File Storage) ---
+
 ITEM_DATA_FILE = "item_data.xlsx"
 EXCEPTION_CASES_FILE = "exception_cases.xlsx"
 
 
-# --- Core Processing Functions ---
-
-def process_orders(orders_df, item_data_df, exception_cases_df):
-    """
-    Processes raw order data to generate a delivery note.
-    Encapsulates the original data processing logic.
-    """
-    # Make a copy to avoid modifying the original DataFrame in session_state
-    orders = orders_df.copy()
-
-    # Filter out rows where `Variant SKU` starts with 'ROUTEINS' or 'KITE'
-    orders = orders[
-        ~orders["Variant SKU"].astype(str).str.startswith(("ROUTEINS", "KITE"))
-    ]
-
-    # Create dictionaries for multipliers and name changes
-    product_multipliers = dict(
-        zip(exception_cases_df["Variant SKU"], exception_cases_df["Quantity"])
-    )
-    product_name_changes = dict(
-        zip(exception_cases_df["Variant SKU"], exception_cases_df["Item Name"])
-    )
-
-    # Convert 'Quantity' column in 'orders' to numeric type
-    orders["Quantity"] = pd.to_numeric(orders["Quantity"], errors="coerce")
-
-    # Apply multipliers and name changes
-    orders["Quantity"] *= orders["Variant SKU"].map(product_multipliers).fillna(1)
-    orders["Variant SKU"] = orders["Variant SKU"].replace(product_name_changes)
-
-    # Aggregate and sort
-    shipment = (
-        orders.groupby("Variant SKU")["Quantity"]
-        .sum()
-        .reset_index()
-        .rename(columns={"Variant SKU": "Variant_SKU"})
-        .assign(Variant_SKU=lambda x: x["Variant_SKU"].str.split("+"))
-        .explode("Variant_SKU")
-    )
-
-    # Define columns for the final delivery note
-    col = [
-        "item_code",
-        "item_name",
-        "description",
-        "qty",
-        "stock_uom",
-        "uom",
-        "amount",
-    ]
-
-    # Merge data, rename and rearrange columns
-    delivery = (
-        shipment.merge(
-            item_data_df, how="left", left_on="Variant_SKU", right_on="Item Name"
-        )
-        .assign(amount=lambda x: x["Quantity"] * x["Amount"])
-        .assign(uom=lambda x: x["Default Unit of Measure"])
-        .rename(
-            columns={
-                "ID": "item_code",
-                "Item Name": "item_name",
-                "Variant_SKU": "description",
-                "Quantity": "qty",
-                "Default Unit of Measure": "stock_uom",
-            }
-        )
-        .reindex(columns=col)
-    )
-
-    # The multi-index column creation seems specific to a certain format, keeping it as is.
-    multi_cols = pd.MultiIndex.from_arrays([col, col, col])
-    delivery.columns = multi_cols
-    new_index = range(-4, len(delivery))
-    delivery = delivery.reindex(new_index)
-
-    return delivery
-
-
-def process_inventory(stock_df, shopify_df, exception_cases_df):
-    """
-    Processes stock and shopify data to update inventory levels.
-    Replaces the original loop with more efficient, vectorized operations.
-    """
-    # Make copies to avoid modifying original DataFrames
-    shopify = shopify_df.copy()
-    exception_cases = exception_cases_df.copy()
-
-    # Create qty mapping for stock
-    stock_qty = stock_df.groupby("Item Name")["Balance Qty"].sum()
-
-    # --- Apply Inventory Logic ---
-    # 1. Set base 'On hand' quantity from the main stock file
-    shopify["On hand"] = shopify["SKU"].map(stock_qty).fillna(0)
-
-    # 2. Apply fixed quantity overrides from exception cases.
-    # These take precedence over the base stock quantity.
-    exception_fixqty = exception_cases.groupby("Variant SKU")["Fix Qty"].sum()
-    shopify["On hand"] = shopify["SKU"].map(exception_fixqty).fillna(shopify["On hand"])
-
-    # 3. For bundled items, subtract the component quantities from the main bundle SKU.
-    # This section is optimized to remove the explicit for-loop.
-    exception_cases["Total Qty"] = (
-        exception_cases["Fix Qty"] * exception_cases["Quantity"]
-    )
-    bundle_component_qty = exception_cases.groupby("Item Name")["Total Qty"].sum()
-
-    # Map the quantities to subtract to the shopify DataFrame and subtract them.
-    subtractions = shopify['SKU'].map(bundle_component_qty).fillna(0)
-    shopify['On hand'] -= subtractions
-
-    return shopify
-
-
-# --- Streamlit App UI ---
-
-st.title("Order and Inventory Processor")
-
-# --- Session State Initialization ---
-# Load persisted files at the start of a new session.
-# Using st.session_state is better for managing data across reruns.
-
-if "item_data" not in st.session_state:
-    if os.path.exists(ITEM_DATA_FILE):
-        st.session_state.item_data = pd.read_excel(ITEM_DATA_FILE)
-    else:
-        st.session_state.item_data = None
-
-if "exception_cases" not in st.session_state:
-    if os.path.exists(EXCEPTION_CASES_FILE):
-        st.session_state.exception_cases = pd.read_excel(EXCEPTION_CASES_FILE)
-    else:
-        st.session_state.exception_cases = None
-
-
-# --- File Upload Section ---
-st.header("1. Upload Data Files")
-st.info(
-    "Upload new files below. 'Item Data' and 'Exception Cases' will be saved for future sessions."
-)
-
-uploaded_item_data = st.file_uploader("Upload Item Data (xlsx)", type=["xlsx"])
-if uploaded_item_data:
-    st.session_state.item_data = pd.read_excel(uploaded_item_data)
-    st.session_state.item_data.to_excel(ITEM_DATA_FILE, index=False)
-    st.success("Item Data file uploaded and saved.")
-
-uploaded_exception_cases = st.file_uploader("Upload Exception Cases (xlsx)", type=["xlsx"])
-if uploaded_exception_cases:
-    st.session_state.exception_cases = pd.read_excel(uploaded_exception_cases)
-    st.session_state.exception_cases.to_excel(EXCEPTION_CASES_FILE, index=False)
-    st.success("Exception Cases file uploaded and saved.")
-
-# --- Order Processing Section ---
-with st.expander("2. Process Orders", expanded=True):
-    uploaded_orders = st.file_uploader("Upload Orders File (xlsx)", type=["xlsx"])
-
-    if uploaded_orders:
+def load_data_if_exists(file_path, file_type):
+    if os.path.exists(file_path):
         try:
-            orders_df = pd.read_excel(uploaded_orders)
-            st.session_state.orders = orders_df
-            st.success("Orders file uploaded successfully!")
+            data = pd.read_excel(file_path)
+            st.success(f"{file_type} file loaded from previous session.")
+            return data
         except Exception as e:
-            st.error(f"Error reading orders file: {e}")
+            st.error(f"Error loading {file_path}: {e}")
+    return None
 
-    if st.button("Process Orders"):
-        if st.session_state.item_data is None or st.session_state.exception_cases is None or 'orders' not in st.session_state:
-            st.warning("Please ensure 'Item Data', 'Exception Cases', and 'Orders' files are all loaded.")
-        else:
-            try:
-                st.write("Processing orders...")
-                processed_delivery = process_orders(
-                    st.session_state.orders,
-                    st.session_state.item_data,
-                    st.session_state.exception_cases,
-                )
-                st.session_state.processed_delivery = processed_delivery
-                st.write("✅ Processing complete. See results below.")
-            except Exception as e:
-                st.error(f"An error occurred during order processing: {e}")
 
-    if "processed_delivery" in st.session_state:
-        st.subheader("Processed Delivery Note")
-        st.dataframe(st.session_state.processed_delivery)
+item_data = load_data_if_exists(ITEM_DATA_FILE, "Item data")
+exception_cases = load_data_if_exists(EXCEPTION_CASES_FILE, "Exception cases")
+
+# --- File Upload Handling ---
+
+st.title("Order Processing")
+
+
+uploaded_item_data = st.file_uploader("Upload or Re-upload Item Data File (xlsx)", type=["xlsx"])
+uploaded_exception_cases = st.file_uploader("Upload or Re-upload Exception Cases File (xlsx)", type=["xlsx"])
+uploaded_orders = st.file_uploader("Upload Orders File (xlsx)", type=["xlsx"])
+
+if uploaded_orders:
+    try:
+        orders = pd.read_excel(uploaded_orders)
+        st.success("Orders file uploaded successfully!")
+    except Exception as e:
+        st.error(f"Error reading orders file: {e}")
+
+if uploaded_item_data:
+    try:
+        item_data = pd.read_excel(uploaded_item_data)
+        item_data.to_excel(ITEM_DATA_FILE, index=False)
+        st.success("Item data file uploaded and saved successfully!")
+    except Exception as e:
+        st.error(f"Error reading or saving item data file: {e}")
+
+if uploaded_exception_cases:
+    try:
+        exception_cases = pd.read_excel(uploaded_exception_cases)
+        exception_cases.to_excel(EXCEPTION_CASES_FILE, index=False)
+        st.success("Exception cases file uploaded and saved successfully!")
+    except Exception as e:
+        st.error(f"Error reading or saving exception cases file: {e}")
+
+# --- Data Processing (Once Reference Data Exists) ---
+
+if item_data is not None and exception_cases is not None and 'orders' in locals():
+    st.subheader("Process Orders")
+
+    if st.button("Process"):
+        # ---- Data Processing Logic ----
+
+        # Filter out rows where `Variant SKU` starts with 'ROUTEINS' or 'KITE'
+        orders = orders[~orders['Variant SKU'].astype(str).str.startswith(('ROUTEINS', 'KITE'))]
+
+        # Create dictionaries for multipliers and name changes
+        product_multipliers = dict(zip(exception_cases['Variant SKU'], exception_cases['Quantity']))
+        product_name_changes = dict(zip(exception_cases['Variant SKU'], exception_cases['Item Name']))
+
+        # Convert 'Quantity' column in 'orders' to numeric type
+        orders['Quantity'] = pd.to_numeric(orders['Quantity'], errors='coerce')
+
+        # Apply multipliers and name changes
+        orders['Quantity'] *= orders['Variant SKU'].map(product_multipliers).fillna(1)
+        orders['Variant SKU'] = orders['Variant SKU'].replace(product_name_changes)
+
+        # Aggregate and sort
+        shipment = (
+            orders.groupby('Variant SKU')['Quantity']
+            .sum()
+            .reset_index()
+            .rename(columns={'Variant SKU': 'Variant_SKU'})
+            .assign(Variant_SKU=lambda x:x['Variant_SKU'].str.split('+'))
+            .explode('Variant_SKU')
+        )
+        # Merge data, rename and rearrange columns according to delivery note template
+
+        col = ['item_code', 'item_name', 'description', 'qty', 'stock_uom', 'uom', 'amount']
+
+        delivery = (
+            shipment.merge(item_data, how='left', left_on='Variant_SKU', right_on='Item Name')
+            .assign(amount=lambda x:x['Quantity'] * x['Amount'])
+            .assign(uom=lambda x:x['Default Unit of Measure'])
+            .rename(columns={'ID':'item_code', 'Item Name':'item_name', 'Variant_SKU':'description', 'Quantity':'qty', 'Default Unit of Measure':'stock_uom'})
+            .reindex(columns=col)
+        )
+
+        multi_cols = pd.MultiIndex.from_arrays([col, col, col])
+        delivery.columns = multi_cols
+
+        new_index = range(-4, len(delivery))
+        delivery = delivery.reindex(new_index)
+
+        # ---- Display & Download Results ----
+
+        st.write("Processed orders:")
+        st.write(delivery)
+
         st.download_button(
             label="Download Delivery as CSV",
-            data=st.session_state.processed_delivery.to_csv(index=False).encode("utf-8"),
-            file_name="delivery.csv",
-            mime="text/csv",
+            data=delivery.to_csv(index=False).encode('utf-8'),
+            file_name='delivery.csv',
+            mime='text/csv',
         )
+else:
+    st.info("Please upload all required files. Item Data and Exception Cases files will be saved for future use.")
 
-# --- Inventory Processing Section ---
-with st.expander("3. Process Inventory", expanded=True):
-    col1, col2 = st.columns(2)
-    with col1:
-        uploaded_stock = st.file_uploader("Upload Stock File (xlsx)", type=["xlsx"])
-        if uploaded_stock:
-            try:
-                st.session_state.stock = pd.read_excel(uploaded_stock)
-                st.success("Stock file uploaded successfully!")
-            except Exception as e:
-                st.error(f"Error reading stock file: {e}")
-    with col2:
-        uploaded_shopify = st.file_uploader("Upload Shopify File (csv)", type=["csv"])
-        if uploaded_shopify:
-            try:
-                st.session_state.shopify = pd.read_csv(uploaded_shopify)
-                st.success("Shopify file uploaded successfully!")
-            except Exception as e:
-                st.error(f"Error reading Shopify file: {e}")
 
-    if st.button("Process Inventories"):
-        if st.session_state.exception_cases is None or 'stock' not in st.session_state or 'shopify' not in st.session_state:
-            st.warning("Please ensure 'Exception Cases', 'Stock', and 'Shopify' files are all loaded.")
-        else:
-            try:
-                st.write("Processing inventories...")
-                processed_inventory = process_inventory(
-                    st.session_state.stock,
-                    st.session_state.shopify,
-                    st.session_state.exception_cases,
-                )
-                st.session_state.processed_inventory = processed_inventory
-                st.write("✅ Processing complete. See results below.")
-            except Exception as e:
-                st.error(f"An error occurred during inventory processing: {e}")
 
-    if "processed_inventory" in st.session_state:
-        st.subheader("Processed Shopify Inventory")
-        st.dataframe(st.session_state.processed_inventory)
+# --- File Upload Handiing ---
+
+st.title('Inventory Processing')
+
+uploaded_stock = st.file_uploader("Upload Stock File (xlsx)", type=["xlsx"])
+uploaded_shopify = st.file_uploader("Upload Shopify File (csv)", type=["csv"])
+
+if uploaded_stock:
+    try:
+        stock = pd.read_excel(uploaded_stock)
+        st.success('Stock file uploaded successfully!')
+    except Exception as e:
+        st.error(f"Error reading stock file: {e}")
+
+if uploaded_shopify:
+    try:
+        shopify = pd.read_csv(uploaded_shopify)
+        st.success('Shopify file uploaded successfully!')
+    except Exception as e:
+        st.error(f"Error reading shopify file: {e}")
+
+# --- Data Processing (Once Reference Data Exists) ---
+
+if exception_cases is not None and 'stock' in locals() and 'shopify' in locals():
+    st.subheader("Process Inventories")
+
+    if st.button("Process"):
+        # ---- Data Processing Logic ----
+
+        # Create qty mapping for stock and exception cases
+        stock_qty = stock.groupby('Item Name')['Balance Qty'].sum()
+        exception_fixqty = exception_cases.groupby('Variant SKU')['Fix Qty'].sum()
+
+        # Create a 'Total Qty' column in exception_cases
+        exception_cases['Total Qty'] = exception_cases['Fix Qty'] * exception_cases['Quantity']
+
+        # First, map stock quantities to the 'On hand' column in shopify
+        shopify['On hand'] = shopify['SKU'].map(stock_qty).fillna(0)
+
+        # Then, update 'On hand' using exception cases, prioritizing the 'Fix Qty'
+        shopify['On hand'] = shopify['SKU'].map(exception_fixqty).fillna(shopify['On hand'])
+        
+        # Finally, update 'On hand' using exception cases, subtracting the 'Total Qty'
+        for i in exception_cases['Item Name'].unique():
+            shopify.loc[shopify['SKU'] == i, 'On hand'] -= exception_cases.loc[exception_cases['Item Name'] == i, 'Total Qty'].sum()
+
+        # ---- Display & Download Results ----
+
+        st.write("Processed inventories (shopify):")
+        st.write(shopify)
+
         st.download_button(
             label="Download Shopify as CSV",
-            data=st.session_state.processed_inventory.to_csv(index=False).encode("utf-8"),
-            file_name="shopify_updated.csv",
-            mime="text/csv",
+            data=shopify.to_csv(index=False).encode('utf-8'),
+            file_name='shopify.csv',
+            mime='text/csv',
         )
+else:
+    st.info("Please upload all required files. Exception Cases file is also needed.")
